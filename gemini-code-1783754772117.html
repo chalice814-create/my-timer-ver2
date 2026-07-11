@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oscar's Day Timer</title>
+    <style>
+        :root {
+            --bg-color: #fcfcfc;
+            --text-color: #1a1a1a;
+            --border-color: #eaeaea;
+            --break-color: #4b8cc4;
+            --hover-bg: #f3f3f3;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            line-height: 1.5;
+        }
+
+        /* 1. Schedule B Toggle Styling */
+        .header-controls {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+        }
+        .schedule-toggle {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #666;
+            background: #fff;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .schedule-toggle input { margin-left: 8px; cursor: pointer; }
+
+        .goal {
+            text-align: center;
+            font-style: italic;
+            color: #555;
+            margin-bottom: 40px;
+            font-size: 0.95rem;
+        }
+
+        /* Timer Interface */
+        .block-info { text-align: center; margin-bottom: 15px; transition: color 0.3s; }
+        .block-name { font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #888; }
+        .block-time { font-size: 1rem; color: #666; margin-top: 4px; }
+        
+        .is-break .block-name { color: var(--break-color); }
+        .is-break .timer-display { color: var(--break-color); }
+
+        .timer-display {
+            font-size: 5.5rem;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            text-align: center;
+            margin: 10px 0 30px 0;
+            letter-spacing: -2px;
+        }
+
+        /* Controls */
+        .controls { display: flex; justify-content: center; gap: 12px; margin-bottom: 15px; }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .btn-primary { background-color: var(--text-color); color: white; }
+        .btn-primary:hover { background-color: #333; }
+        .btn-secondary { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-color); }
+        .btn-secondary:hover { background-color: var(--hover-bg); }
+        
+        /* 4. Post-Facto Correction Button */
+        .manual-log-container { text-align: center; margin-bottom: 40px; }
+        .btn-manual {
+            background-color: transparent;
+            border: none;
+            text-decoration: underline;
+            font-size: 0.85rem;
+            color: #888;
+            padding: 4px 8px;
+            font-weight: 400;
+        }
+        .btn-manual:hover { color: var(--text-color); }
+
+        /* Dashboard */
+        .dashboard {
+            border-top: 1px solid var(--border-color);
+            padding-top: 30px;
+        }
+        .dashboard h3 { margin-top: 0; font-size: 1.1rem; margin-bottom: 15px; }
+        .log-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .btn-full { width: 100%; }
+        .stats { margin-top: 15px; font-size: 0.9rem; color: #666; text-align: center; }
+
+    </style>
+</head>
+<body>
+
+    <div class="header-controls">
+        <label class="schedule-toggle">
+            Schedule B (Late Start)
+            <input type="checkbox" id="scheduleBToggle">
+        </label>
+    </div>
+
+    <div class="goal">Pass the entrance exam · Own the thesis · Stop surviving the day, start running it.</div>
+
+    <div class="block-info" id="blockInfo">
+        <div class="block-name" id="blockName">Loading...</div>
+        <div class="block-time" id="blockTime">--:--</div>
+    </div>
+
+    <div class="timer-display" id="timeDisplay">00:00</div>
+
+    <div class="controls">
+        <button class="btn-secondary" id="resetBtn">Reset</button>
+        <button class="btn-primary" id="startBtn">Start</button>
+        <button class="btn-secondary" id="skipBtn">Skip &rarr;</button>
+    </div>
+    
+    <div class="manual-log-container">
+        <button class="btn-manual" id="manualBtn">Logged Manually</button>
+    </div>
+
+    <div class="dashboard">
+        <h3>Log today's session</h3>
+        <input type="text" class="log-input" id="logTask" placeholder="What did you work on? (e.g., Translating Eyre Rolls JUST 1/1187, Samalas eruption research)">
+        <button class="btn-primary btn-full" id="saveLogBtn">Save today's log</button>
+        <div class="stats">Blocks completed today: <strong id="blocksCount">0</strong></div>
+    </div>
+
+    <script>
+        // Baseline Schedule Configuration
+        const baseSchedule = [
+            { type: 'work', name: 'Block 1', startHour: 5, startMin: 45, duration: 75 },
+            { type: 'break', name: 'Short Break', duration: 20 },
+            { type: 'work', name: 'Block 2', startHour: 7, startMin: 20, duration: 90 },
+            { type: 'break', name: 'Short Break', duration: 20 },
+            { type: 'work', name: 'Block 3', startHour: 9, startMin: 10, duration: 90 },
+            { type: 'break', name: 'Long Break', duration: 90 },
+            { type: 'work', name: 'Block 4', startHour: 12, startMin: 10, duration: 90 },
+            { type: 'break', name: 'Short Break', duration: 20 },
+            { type: 'work', name: 'Block 5', startHour: 14, startMin: 0, duration: 90 }
+        ];
+
+        // Application State
+        let state = {
+            currentBlockIndex: 0,
+            timeRemaining: baseSchedule[0].duration * 60,
+            isRunning: false,
+            lastTickTime: Date.now(),
+            scheduleB: false,
+            blocksCompleted: 0
+        };
+
+        let timerInterval = null;
+
+        // DOM Elements
+        const elTimeDisplay = document.getElementById('timeDisplay');
+        const elBlockName = document.getElementById('blockName');
+        const elBlockTime = document.getElementById('blockTime');
+        const elBlockInfo = document.getElementById('blockInfo');
+        const elStartBtn = document.getElementById('startBtn');
+        const elScheduleBToggle = document.getElementById('scheduleBToggle');
+        const elBlocksCount = document.getElementById('blocksCount');
+        const elManualBtn = document.getElementById('manualBtn');
+
+        // --- 2. Persistent State Recovery ---
+        function loadState() {
+            const saved = localStorage.getItem('oscarTimerState');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                state = { ...state, ...parsed };
+                
+                // Anti-Accidental Refresh Calculation
+                if (state.isRunning) {
+                    const now = Date.now();
+                    const elapsedSecs = Math.floor((now - state.lastTickTime) / 1000);
+                    state.timeRemaining -= elapsedSecs;
+                    state.lastTickTime = now;
+                    
+                    if (state.timeRemaining <= 0) {
+                        state.timeRemaining = 0;
+                        handleBlockEnd(true); // true = offline mode (no audio shock)
+                    } else {
+                        startClock();
+                    }
+                }
+            } else {
+                state.timeRemaining = baseSchedule[state.currentBlockIndex].duration * 60;
+            }
+            elScheduleBToggle.checked = state.scheduleB;
+            updateUI();
+        }
+
+        function saveState() {
+            localStorage.setItem('oscarTimerState', JSON.stringify(state));
+        }
+
+        // --- Core Formatting & UI ---
+        function formatTime(totalSeconds) {
+            const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateUI() {
+            const block = baseSchedule[state.currentBlockIndex];
+            elBlockName.innerText = block.name;
+            elTimeDisplay.innerText = formatTime(state.timeRemaining);
+            elStartBtn.innerText = state.isRunning ? "Pause" : "Start";
+            elBlocksCount.innerText = state.blocksCompleted;
+
+            if (block.type === 'work') {
+                elBlockInfo.className = 'block-info';
+                elManualBtn.style.display = 'inline-block';
+                
+                // Apply Schedule B logic to displayed times
+                let startH = block.startHour + (state.scheduleB ? 1 : 0);
+                let startM = block.startMin.toString().padStart(2, '0');
+                
+                let totalEndMins = (startH * 60) + block.startMin + block.duration;
+                let endH = Math.floor(totalEndMins / 60);
+                let endM = (totalEndMins % 60).toString().padStart(2, '0');
+                
+                elBlockTime.innerText = `${startH}:${startM} – ${endH}:${endM}`;
+            } else {
+                elBlockInfo.className = 'block-info is-break';
+                elBlockTime.innerText = `${block.duration} Minute Reset`;
+                elManualBtn.style.display = 'none';
+            }
+
+            updateDocumentTitle();
+        }
+
+        // --- 3. High-Contrast Document Title ---
+        function updateDocumentTitle() {
+            if (!state.isRunning) {
+                document.title = "Oscar's Day Timer";
+                return;
+            }
+            
+            const block = baseSchedule[state.currentBlockIndex];
+            if (block.type === 'break') {
+                // Flash effect for break
+                document.title = (state.timeRemaining % 2 === 0) ? '!! BREAK TIME !!' : `[${formatTime(state.timeRemaining)}]`;
+            } else {
+                document.title = `[${formatTime(state.timeRemaining)}] - Block Active`;
+            }
+        }
+
+        // --- 5. Auto-Start Break Sequence (and Timer Logic) ---
+        function playAlertSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.5);
+                gain.gain.setValueAtTime(1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.5);
+            } catch (e) { console.log("Audio skipped"); }
+        }
+
+        function tick() {
+            const now = Date.now();
+            const elapsed = Math.floor((now - state.lastTickTime) / 1000);
+            
+            if (elapsed >= 1) {
+                state.timeRemaining -= elapsed;
+                state.lastTickTime = now;
+                
+                if (state.timeRemaining <= 0) {
+                    state.timeRemaining = 0;
+                    handleBlockEnd(false);
+                } else {
+                    saveState();
+                    updateUI();
+                }
+            }
+        }
+
+        function handleBlockEnd(isOfflineMode) {
+            const block = baseSchedule[state.currentBlockIndex];
+            if (!isOfflineMode) playAlertSound();
+
+            if (block.type === 'work') {
+                state.blocksCompleted++;
+                advanceToNextBlock();
+                // Sequence 5: Auto-start the break seamlessly
+                state.isRunning = true;
+                state.lastTickTime = Date.now();
+                startClock();
+            } else {
+                advanceToNextBlock();
+                // Pause automatically when a break ends and work begins
+                state.isRunning = false;
+                stopClock();
+            }
+            
+            saveState();
+            updateUI();
+        }
+
+        function advanceToNextBlock() {
+            state.currentBlockIndex++;
+            if (state.currentBlockIndex >= baseSchedule.length) {
+                state.currentBlockIndex = 0; 
+            }
+            state.timeRemaining = baseSchedule[state.currentBlockIndex].duration * 60;
+        }
+
+        function startClock() {
+            if (!timerInterval) timerInterval = setInterval(tick, 1000);
+        }
+
+        function stopClock() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        // --- Event Listeners ---
+        elStartBtn.addEventListener('click', () => {
+            if (state.isRunning) {
+                state.isRunning = false;
+                stopClock();
+            } else {
+                // Browsers require user interaction before AudioContext can be initialized securely later
+                const initAudio = new (window.AudioContext || window.webkitAudioContext)();
+                initAudio.resume();
+
+                state.isRunning = true;
+                state.lastTickTime = Date.now();
+                startClock();
+            }
+            saveState();
+            updateUI();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            state.timeRemaining = baseSchedule[state.currentBlockIndex].duration * 60;
+            state.isRunning = false;
+            stopClock();
+            saveState();
+            updateUI();
+        });
+
+        document.getElementById('skipBtn').addEventListener('click', () => {
+            state.isRunning = false;
+            stopClock();
+            advanceToNextBlock();
+            saveState();
+            updateUI();
+        });
+
+        // 1. Schedule B Event
+        elScheduleBToggle.addEventListener('change', (e) => {
+            state.scheduleB = e.target.checked;
+            saveState();
+            updateUI();
+        });
+
+        // 4. Post-Facto Correction Event
+        elManualBtn.addEventListener('click', () => {
+            if (baseSchedule[state.currentBlockIndex].type === 'work') {
+                state.blocksCompleted++;
+                advanceToNextBlock();
+                // Instantly pivot into a running break
+                state.isRunning = true;
+                state.lastTickTime = Date.now();
+                startClock();
+                saveState();
+                updateUI();
+            }
+        });
+
+        // Initialization
+        loadState();
+
+    </script>
+</body>
+</html>
