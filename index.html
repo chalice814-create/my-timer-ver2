@@ -2008,26 +2008,23 @@ function runInit(){
 }
 </script>
 <script type="module">
-  // 1. Tell your browser where to find Firebase [U3]
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics.js";
+  // Add this line to import the Auth SDK [U3]
+  import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
-  // 2. Paste your project's unique configuration [U1]
   const firebaseConfig = {
     apiKey: "AIzaSyBfsKO32Rp2tryhZpT_-71KsCCVgRyEbwk",
     authDomain: "my-timer-49471.firebaseapp.com",
     projectId: "my-timer-49471",
     storageBucket: "my-timer-49471.firebasestorage.app",
     messagingSenderId: "257158024280",
-    appId: "1:257158024280:web:b0c3f3f645f9c0d2c20e2d",
-    measurementId: "G-DXQFPLBX09"
+    appId: "1:257158024280:web:b0c3f3f645f9c0d2c20e2d"
   };
 
-  // 3. Turn Firebase on!
   const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
   
-  console.log("Firebase is ready to go!");
+  // Initialize Auth
+  const auth = getAuth(app);
 </script>
 
 </body>
