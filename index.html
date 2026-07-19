@@ -635,12 +635,12 @@
 // "Your apps" → Web app → SDK setup and configuration → Config.
 // ════════════════════════════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBfsKO32Rp2tryhZpT_-71KsCCVgRyEbwk",
+  authDomain: "my-timer-49471.firebaseapp.com",
+  projectId: "my-timer-49471",
+  storageBucket: "my-timer-49471.firebasestorage.app",
+  messagingSenderId: "257158024280",
+  appId: "1:257158024280:web:b0c3f3f645f9c0d2c20e2d"
 };
 // ▲▲▲ ────────────────────────────────────────────────────────────────── ▲▲▲
 
@@ -2007,25 +2007,5 @@ function runInit(){
   }
 }
 </script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-  // Add this line to import the Auth SDK [U3]
-  import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBfsKO32Rp2tryhZpT_-71KsCCVgRyEbwk",
-    authDomain: "my-timer-49471.firebaseapp.com",
-    projectId: "my-timer-49471",
-    storageBucket: "my-timer-49471.firebasestorage.app",
-    messagingSenderId: "257158024280",
-    appId: "1:257158024280:web:b0c3f3f645f9c0d2c20e2d"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  
-  // Initialize Auth
-  const auth = getAuth(app);
-</script>
-
 </body>
 </html>
