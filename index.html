@@ -693,26 +693,47 @@ const SYNCED_KEYS = [
 // rapid changes (e.g. the timer ticking every 500ms) collapse into one write
 // shortly after things settle, instead of hammering the database.
 const cloudPushTimers = {};
+const pendingCloudPushes = {}; // key -> value, for anything not yet flushed to Firestore
 const AppStorage = {
   getItem(key){ return window.localStorage.getItem(key); },
   setItem(key, value){
     window.localStorage.setItem(key, value);
+    if(SYNCED_KEYS.includes(key)) window.localStorage.setItem(key+'__ts', String(Date.now()));
     scheduleCloudPush(key, value);
   },
   removeItem(key){
     window.localStorage.removeItem(key);
+    if(SYNCED_KEYS.includes(key)) window.localStorage.removeItem(key+'__ts');
     scheduleCloudPush(key, null);
   }
 };
 function scheduleCloudPush(key, value){
   if(!firebaseReady || !currentUser || !SYNCED_KEYS.includes(key)) return;
   clearTimeout(cloudPushTimers[key]);
-  cloudPushTimers[key] = setTimeout(()=>pushKeyToCloud(key, value), 800);
+  pendingCloudPushes[key] = value;
+  cloudPushTimers[key] = setTimeout(()=>{
+    delete pendingCloudPushes[key];
+    pushKeyToCloud(key, value);
+  }, 800);
+}
+// Mobile browsers frequently kill/reload a backgrounded tab before a debounced
+// setTimeout ever gets to fire. Whenever the tab is about to be hidden or
+// unloaded, push any still-pending writes to Firestore right away instead of
+// waiting on the debounce — this is what stops "come back later and find your
+// progress reverted" from happening.
+function flushPendingCloudPushes(){
+  if(!firebaseReady || !currentUser) return;
+  Object.keys(pendingCloudPushes).forEach(key=>{
+    clearTimeout(cloudPushTimers[key]);
+    const value = pendingCloudPushes[key];
+    delete pendingCloudPushes[key];
+    pushKeyToCloud(key, value);
+  });
 }
 function pushKeyToCloud(key, value){
   if(!firebaseReady || !currentUser) return;
   const ref = db.collection('users').doc(currentUser.uid).collection('keys').doc(key);
-  const op = (value===null) ? ref.delete() : ref.set({ value, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  const op = (value===null) ? ref.delete() : ref.set({ value, clientTs: Date.now(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   op.catch(e=>console.error('Cloud sync failed for', key, e));
 }
 // Pulls a user's data from Firestore into localStorage. Always clears every
@@ -723,17 +744,46 @@ function pushKeyToCloud(key, value){
 // — instead of inheriting local data left behind by a previous session or a
 // different account on the same device.
 async function pullAllFromCloud(uid){
-  SYNCED_KEYS.forEach(key => window.localStorage.removeItem(key));
+  // Only wipe-then-repopulate on an actual account switch (a different UID than
+  // whatever was last synced on this device). When it's the same user restoring
+  // an already-persisted session (e.g. the tab got reloaded after being
+  // backgrounded), blindly overwriting local with cloud risks clobbering a
+  // write that was made locally but hadn't reached Firestore yet — that's what
+  // caused the "timer resets" bug. Instead, compare timestamps per key and keep
+  // whichever side is actually newer, re-pushing local if it wins.
+  const lastUid = window.localStorage.getItem('oscar_last_uid');
+  const sameUser = (lastUid === uid);
+  if(!sameUser){
+    SYNCED_KEYS.forEach(key => { window.localStorage.removeItem(key); window.localStorage.removeItem(key+'__ts'); });
+  }
   const snap = await db.collection('users').doc(uid).collection('keys').get();
-  snap.forEach(docSnap=>{
-    const data = docSnap.data();
+  const cloudDocs = {};
+  snap.forEach(docSnap => { cloudDocs[docSnap.id] = docSnap.data(); });
+
+  SYNCED_KEYS.forEach(key=>{
+    const data = cloudDocs[key];
+    if(sameUser){
+      const localTs = Number(window.localStorage.getItem(key+'__ts') || 0);
+      const cloudTs = data ? Number(data.clientTs || 0) : 0;
+      if(localTs > cloudTs){
+        // Local copy is newer than what made it to the cloud — keep it, and
+        // make sure the cloud catches up.
+        const localValue = window.localStorage.getItem(key);
+        if(localValue !== null) pushKeyToCloud(key, localValue);
+        return;
+      }
+    }
     if(data && typeof data.value === 'string'){
-      window.localStorage.setItem(docSnap.id, data.value);
+      window.localStorage.setItem(key, data.value);
+      window.localStorage.setItem(key+'__ts', String(data.clientTs || Date.now()));
+    } else if(!sameUser){
+      window.localStorage.removeItem(key);
     }
   });
+  window.localStorage.setItem('oscar_last_uid', uid);
 }
 function clearLocalSyncedData(){
-  SYNCED_KEYS.forEach(key => window.localStorage.removeItem(key));
+  SYNCED_KEYS.forEach(key => { window.localStorage.removeItem(key); window.localStorage.removeItem(key+'__ts'); });
 }
 
 // ── AUTH UI ────────────────────────────────────────────────────────────────────
@@ -2083,7 +2133,12 @@ function showPage(id){
 }
 
 // ── PERSISTENCE HOOKS ─────────────────────────────────────────────────────────
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkDayRollover(); saveState(); });
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden){ checkDayRollover(); }
+  else { flushPendingCloudPushes(); }
+  saveState();
+});
+window.addEventListener('pagehide', ()=>{ saveState(); flushPendingCloudPushes(); });
 window.addEventListener('beforeunload', saveState);
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
